@@ -46,51 +46,128 @@ def main():
 
     # bind socket to ip and port
     listenfd.bind(('', int(port)))
-
     # listen to socket
     listenfd.listen(1)
-
     # accept connection
     (connfd, addr) = listenfd.accept()
 
+    #No cryptography: messages are not protected.
+    if type_encryption == "NONE":
+        while(True):
+            msg = connfd.recv(1024).decode()
+            print("Received from client: %s" % msg)
 
-    #getting the key and iv and decrypting it
-    key_enc = connfd.recv(1024)
-    iv_enc = connfd.recv(1024)
-    aes_key = private_key.decrypt(
-        key_enc,
-        padding.OAEP(
-            mgf=padding.MGF1(algorithm=hashes.SHA256()),
-            algorithm=hashes.SHA256(),
-            label=None
+    #Symmetric encryption only: the confidentiality of messages is protected.
+    if type_encryption == "SYMMETRIC":
+        #getting the key and iv 
+        key_enc = connfd.recv(1024)
+        iv_enc = connfd.recv(1024)
+        #decrypting aes key using the private key
+        aes_key = private_key.decrypt(
+            key_enc,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+                )
             )
-        )
-    aes_iv = private_key.decrypt(
-        iv_enc,
-        padding.OAEP(
-            mgf=padding.MGF1(algorithm=hashes.SHA256()),
-            algorithm=hashes.SHA256(),
-            label=None
+        #decrypting aes iv using the private key
+        aes_iv = private_key.decrypt(
+            iv_enc,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+                )
             )
-        )
-
-    cipher = Cipher(algorithms.AES(aes_key), modes.CBC(aes_iv))
-    decryptor = cipher.decryptor()
-
-
-    #unpadder = pad.PKCS7(16).unpadder()
-
-    # message loop
-    while(True):
-        msg_ct = connfd.recv(1024)
-        signature = connfd.recv(1024)
-        check_signature(aes_key,msg_ct,signature)
-        
-        print("Received: ", msg_ct.decode(), signature)
+        #creating the cipher using aes key and aes iv
+        cipher = Cipher(algorithms.AES(aes_key), modes.CBC(aes_iv))
+        #initiliazing the decryptor
+        decryptor = cipher.decryptor()
+        #unpadder = pad.PKCS7(16).unpadder()
+        while(True):
+            #creating the cipher using aes key and aes iv
+            cipher = Cipher(algorithms.AES(aes_key), modes.CBC(aes_iv))
+            #initiliazing the decryptor
+            decryptor = cipher.decryptor()
+            #receiving the cipher message
+            msg_ct = connfd.recv(1024)
+            #decrypting it
+            msg = (decryptor.update(msg_ct) + decryptor.finalize())
+            # = unpadder.update(msg) + unpadder.finalize()
+            #printing it without the padding 
+            print("Received from client: %s" % msg.decode().strip())
+            
+    if type_encryption == "MAC":
+        #Getting and decrypting the aes key in order to check signature
+        key_enc = connfd.recv(1024)
+        aes_key = private_key.decrypt(
+            key_enc,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+                )
+            )
+        while(True):
+            #receive message
+            msg_ct = connfd.recv(1024)
+            #receive signature
+            signature = connfd.recv(1024)
+            #check signature (this returns an exception if signature is comprimised)
+            check_signature(aes_key,msg_ct,signature)
+            print("Received: ", msg_ct.decode(), "Signature: ",signature)
 
         #msg = (decryptor.update(msg_ct) + decryptor.finalize())
         #data = unpadder.update(msg) + unpadder.finalize()
         #print("Received from client: %s" % msg.decode().strip())
+    if type_encryption == "SYMMETRIC_MAC":
+        #getting the key and iv 
+        key_enc = connfd.recv(1024)
+        iv_enc = connfd.recv(1024)
+        #decrypting aes key using the private key
+        aes_key = private_key.decrypt(
+            key_enc,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+                )
+            )
+        #decrypting aes iv using the private key
+        aes_iv = private_key.decrypt(
+            iv_enc,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+                )
+            )
+        #creating the cipher using aes key and aes iv
+        cipher = Cipher(algorithms.AES(aes_key), modes.CBC(aes_iv))
+        #initiliazing the decryptor
+        decryptor = cipher.decryptor()
+        while(True):
+            #creating the cipher using aes key and aes iv
+            cipher = Cipher(algorithms.AES(aes_key), modes.CBC(aes_iv))
+            #initiliazing the decryptor
+            decryptor = cipher.decryptor()
+            #receiving the cipher message
+            msg_ct = connfd.recv(1024)
+            signature = connfd.recv(1024)
+           
+            #decrypting it
+            msg = (decryptor.update(msg_ct) + decryptor.finalize())
+
+            #checking for signature: results in exception if compromised
+            check_signature(aes_key,msg_ct,signature)
+            print("Received from client: %s" % msg.decode().strip(), "Signature from client: ",signature)
+
+
+
+
+
+
 
 #        # You don't need to send a response for this assignment
 #        # but if you wanted to you'd do something like this

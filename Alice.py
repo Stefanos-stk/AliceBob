@@ -80,27 +80,81 @@ def main():
 
     # open a socket
     clientfd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
     # connect to server
     clientfd.connect((host, int(port)))
 
-    key_enc  =  generate_encrypted_rsa(public_key,key)
-    iv_enc  = generate_encrypted_rsa(public_key,iv)
 
-    clientfd.send(key_enc)
-    clientfd.send(iv_enc)
-    cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
-    encryptor = cipher.encryptor()
+    #No cryptography: messages are not protected.
+    if type_encryption == "NONE":
+        while(True):
+            msg = input("Enter message for server: ").encode()
+            clientfd.send(msg)
 
-    padder = pad.PKCS7(16).padder()
+    #Symmetric encryption only: the confidentiality of messages is protected.
+    if type_encryption == "SYMMETRIC":
+        #Generate key and initializing vector, and encrypting it with the public key
+        key_enc  =  generate_encrypted_rsa(public_key,key)
+        iv_enc  = generate_encrypted_rsa(public_key,iv)
+        #sending iv and key
+        clientfd.send(key_enc)
+        clientfd.send(iv_enc)
 
-    # message loop
-    while(True):
-        
-        msg = input("Enter message for server: ").encode()
-        message_signature = signature(key,msg)
-        clientfd.send(msg)
-        clientfd.send(message_signature)
+        #creating the cipher using the random generated key and CBC mode
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+        #initialzing the cipher encryptor
+        encryptor = cipher.encryptor()
+        #padding the string (not using)
+        #padder = pad.PKCS7(16).padder()
+        while(True):
+            #creating the cipher using the random generated key and CBC mode
+            cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+            #initialzing the cipher encryptor
+            encryptor = cipher.encryptor()
+            #getting user input
+            msg = input("Enter message for server: ")
+            #padding
+            msg = padd(msg).encode()
+            msg_ct = encryptor.update(msg) + encryptor.finalize()
+            clientfd.send(msg_ct)
+
+    #MACs only: the integrity of messages is protected.
+    if type_encryption == "MAC":
+        #Encrypting and sending the aes key
+        key_enc  =  generate_encrypted_rsa(public_key,key)
+        clientfd.send(key_enc)
+        while(True):
+            msg = input("Enter message for server: ").encode()
+            message_signature = signature(key,msg)
+            clientfd.send(msg)
+            clientfd.send(message_signature)
+
+    if type_encryption == "SYMMETRIC_MAC":
+        #Generate key and initializing vector, and encrypting it with the public key
+        key_enc  =  generate_encrypted_rsa(public_key,key)
+        iv_enc  = generate_encrypted_rsa(public_key,iv)
+        #sending iv and key
+        clientfd.send(key_enc)
+        clientfd.send(iv_enc)
+        #creating the cipher using the random generated key and CBC mode
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+        #initialzing the cipher encryptor
+        encryptor = cipher.encryptor()
+        while(True):
+            #creating the cipher using the random generated key and CBC mode
+            cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+            #initialzing the cipher encryptor
+            encryptor = cipher.encryptor()
+            #getting user input
+            msg = input("Enter message for server: ")
+            #padding
+            msg = padd(msg).encode()
+            msg_ct = encryptor.update(msg) + encryptor.finalize()
+
+            #GETTING SIGNATURE FOR CIPGER MESSAGE
+            message_signature = signature(key,msg_ct)
+            #SENDING THE ENCRYPTED ALONG WITH SIGNATURE OF THE MESSAGE
+            clientfd.send(msg_ct)
+            clientfd.send(message_signature)
 
 
 
