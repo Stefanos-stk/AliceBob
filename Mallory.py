@@ -47,13 +47,49 @@ def main():
 
 
     # message loop
-    while(True):
-        #Receiving
-        msg = connfd.recv(1024).decode()
-        print("Received from client Alice: %s" % msg)
+    if type_encryption == "NONE":
+        while(True):
+            #Receiving
+            msg = connfd.recv(1024).decode()
+            print("Received from client Alice: %s" % msg)
 
-        #Relaying the message to Bob
-        clientfd.send(msg.encode())
+            #Relaying the message to Bob
+            clientfd.send(msg.encode())
+
+    if type_encryption == "SYMMETRIC":
+
+        #recieve the encrypted key and iv 
+        key_enc = connfd.recv(1024)
+        iv_enc = connfd.recv(1024)
+
+        #send the encrytped key and iv
+        clientfd.send(key_enc)
+        clientfd.send(iv_enc)   
+
+        #recieve the encrcypted message and forward it
+        while(True):
+            msg_enc = connfd.recv(1024)
+            print(msg_enc)
+            clientfd.send(msg_enc)
+    
+    if type_encryption == "MAC":
+
+        #recieving and sending encrypted aes key
+        key_enc = connfd.recv(1024)
+        clientfd.send(key_enc)
+
+        #recieve message and Mac, print the plain text, forward
+        while(True):
+            msg_ct = connfd.recv(1024)
+            hash_mac = connfd.recv(1024)
+
+            clientfd.send(msg_ct)
+            clientfd.send(hash_mac)
+
+            
+            print(msg_ct)
+
+
 
 
 

@@ -35,32 +35,15 @@ def generate_encrypted_rsa(public_key,message):
     )
     return key_encryped
 
-def aes_encrypt_b64(key,iv, data):
-    """
-    This function encrypts the data using AES-128-CBC. It generates
-    and adds an IV.
-    This is used for PSKC.
-
-    :param key: Encryption key (binary format)
-    :type key: bytes
-    :param data: Data to encrypt
-    :type data: bytes
-    :return: base64 encrypted output, containing IV and encrypted data
-    :rtype: str
-    """
-    # pad data
-    padder = padding.PKCS7(algorithms.AES.block_size).padder()
-    padded_data = padder.update(data) + padder.finalize()
-    encdata = algorithms.aes_cbc_encrypt(key, iv, padded_data)
-    return b64encode_and_unicode(iv + encdata) 
-
 def padd(s):
     block_size = 16
     remainder = len(s) % block_size
     padding_needed = block_size - remainder
+    if padding_needed == 0:
+        padding_needed = 16
     return s + padding_needed * ' '
 
-def signature(key,msg):
+def hash_mac(key,msg):
     h = hmac.HMAC(key, hashes.SHA256())
     h.update(msg)
     
@@ -71,7 +54,7 @@ def main():
     key,iv =  generate_key_iv()
     # parse arguments
     if len(sys.argv) != 4:
-        print("usage: python3 %s <host> <port>" % sys.argv[0]);
+        print("usage: python3 %s <host> <port>" % sys.argv[0])
         quit(1)
     host = sys.argv[1]
     port = sys.argv[2]
@@ -113,7 +96,8 @@ def main():
             #getting user input
             msg = input("Enter message for server: ")
             #padding
-            msg = padd(msg).encode()
+            # msg = padd(msg).encode()
+            msg = msg.encode()
             msg_ct = encryptor.update(msg) + encryptor.finalize()
             clientfd.send(msg_ct)
 
@@ -124,7 +108,7 @@ def main():
         clientfd.send(key_enc)
         while(True):
             msg = input("Enter message for server: ").encode()
-            message_signature = signature(key,msg)
+            message_signature = hash_mac(key,msg)
             clientfd.send(msg)
             clientfd.send(message_signature)
 
@@ -151,7 +135,7 @@ def main():
             msg_ct = encryptor.update(msg) + encryptor.finalize()
 
             #GETTING SIGNATURE FOR CIPGER MESSAGE
-            message_signature = signature(key,msg_ct)
+            message_signature = hash_mac(key,msg_ct)
             #SENDING THE ENCRYPTED ALONG WITH SIGNATURE OF THE MESSAGE
             clientfd.send(msg_ct)
             clientfd.send(message_signature)
