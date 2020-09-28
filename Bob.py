@@ -27,7 +27,6 @@ def check_signature(key,msg,signature):
     h.update(msg)
     h.verify(signature)
 
-
 def main():
     # parse arguments
     public_key,private_key  = load_keys()

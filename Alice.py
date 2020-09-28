@@ -158,7 +158,6 @@ def main():
 
 
 
-
         #msg = padd(msg).encode()
         #client.send(aes_encrypt_b64(msg))
         
