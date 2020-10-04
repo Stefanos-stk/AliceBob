@@ -5,6 +5,10 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes, hmac
 
+
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.asymmetric import ed25519
+
 from cryptography.hazmat.primitives import padding as pad
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
@@ -20,16 +24,27 @@ def load_keys():
             key_file.read(),
             backend=default_backend()
     )
-    return public_key,private_key
+
+    with open("public_key_4sign.raw",'rb') as key_file:
+        public_key_4sign = ed25519.Ed25519PublicKey.from_public_bytes(key_file.read())
+
+    return public_key,private_key,public_key_4sign
 
 def check_signature(key,msg,signature):
     h = hmac.HMAC(key, hashes.SHA256())
     h.update(msg)
     h.verify(signature)
 
+
+def unpadd(msg):
+    msg  = msg.decode()
+    tail = ord(msg[-1])
+    msg_unpadd = msg[:(-1 * tail)]
+    return msg_unpadd
+
 def main():
     # parse arguments
-    public_key,private_key  = load_keys()
+    public_key,private_key,public_key_4sign  = load_keys()
 
 
     if len(sys.argv) != 3:
@@ -37,7 +52,7 @@ def main():
         quit(1)
     port = sys.argv[1]
     #type of encryption
-    type_encryption = sys.argv[2]
+    type_encryption = sys.argv[2].upper() 
     
     # open a socket
     listenfd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -46,10 +61,20 @@ def main():
     # bind socket to ip and port
     listenfd.bind(('', int(port)))
     # listen to socket
+
     listenfd.listen(1)
+  
     # accept connection
     (connfd, addr) = listenfd.accept()
 
+    #handsahke
+    b = connfd.recv(1024).decode()
+    tA = connfd.recv(1024).decode()
+    encA_kAB_Kb_key = connfd.recv(1024).decode()
+    encA_kAB_Kb_iv = connfd.recv(1024).decode()
+    handshake_signature= connfd.recv(1024)
+
+    
     #No cryptography: messages are not protected.
     if type_encryption == "NONE":
         while(True):
@@ -95,7 +120,10 @@ def main():
             msg = (decryptor.update(msg_ct) + decryptor.finalize())
             # = unpadder.update(msg) + unpadder.finalize()
             #printing it without the padding 
-            print("Received from client: %s" % msg.decode().strip())
+            msg = unpadd(msg)
+            #print(len(msg.decode().strip()))
+            print(len(msg))
+            print("Received from client: %s" %  msg)
             
     if type_encryption == "MAC":
         #Getting and decrypting the aes key in order to check signature
