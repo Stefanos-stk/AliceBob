@@ -3,6 +3,7 @@ import socket
 import os
 from os import _exit as quit
 from datetime import datetime
+import base64
 
 
 from cryptography.hazmat.backends import default_backend
@@ -14,6 +15,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
 
 def load_keys():
     with open("public_key.pem", "rb") as key_file:
@@ -27,12 +29,14 @@ def load_keys():
 
     return public_key,private_key_4sign
 
+
 def generate_key_iv():
     key = os.urandom(32)
     iv = os.urandom(16)
     return key,iv
 
-def generate_encrypted_rsa(public_key,message):
+
+def rsa_encrypt(public_key,message):
     key_encryped = public_key.encrypt(
     message,
     padding.OAEP(
@@ -42,6 +46,19 @@ def generate_encrypted_rsa(public_key,message):
         )
     )
     return key_encryped
+
+
+def aes_encrypt(key, iv, msg):
+
+    #Create cipher and encrypter in CBC mode with key and iv
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+    encryptor = cipher.encryptor()
+    
+    # Encrypt the message
+    msg = padd(msg).encode()
+    msg_ct = encryptor.update(msg) + encryptor.finalize()
+    return msg_ct
+
 
 def padd(s):
     block_size = 16
@@ -58,6 +75,7 @@ def hash_mac(key,msg):
     h.update(msg)
     
     return h.finalize()
+
 
 def main():
     public_key,private_4sign  = load_keys()
@@ -78,17 +96,20 @@ def main():
     clientfd.connect((host, int(port)))
     #Handshake ------------- Handshake
 
-    b = 'B'.encode()
-    tA = datetime.now().strftime("%d-%b-%Y (%H:%M:%S.%f)").encode()
-    encA_kAB_Kb_key = generate_encrypted_rsa(public_key,("A"+str(key)).encode())
-    encA_kAB_Kb_iv = generate_encrypted_rsa(public_key,("A"+str(iv)).encode())
+    b = 'B'
+    tA = datetime.now().strftime("%d-%b-%Y (%H:%M:%S.%f)")
+    encA_kAB_Kb_key = rsa_encrypt(public_key,("A"+str(key)).encode())
+    print(str(encA_kAB_Kb_key))
+    
+    handshake_signature = private_4sign.sign((b+tA+str(encA_kAB_Kb_key)).encode())
 
-    handshake_signature = private_4sign.sign(b+tA+encA_kAB_Kb_key+encA_kAB_Kb_iv)
-    clientfd.send(b)
-    clientfd.send(tA)
-    clientfd.send(encA_kAB_Kb_key)
-    clientfd.send(encA_kAB_Kb_iv)
-    clientfd.send(handshake_signature)
+    # handshake
+    clientfd.send((b + tA + str(encA_kAB_Kb_key)+ str(handshake_signature)).encode())
+    #clientfd.send(handshake_signature)
+
+    # clientfd.send(encA_kAB_Kb_key)
+    # clientfd.send(encA_kAB_Kb_iv)
+    # clientfd.send(handshake_signature)
     #clientfd.send(b+b','+ tA+b','+encA_kAB_Kb_key+b','+encA_kAB_Kb_iv +b','+handshake_signature)
 
 
@@ -101,85 +122,57 @@ def main():
 
     #Symmetric encryption only: the confidentiality of messages is protected.
     if type_encryption == "SYMMETRIC":
-        #Generate key and initializing vector, and encrypting it with the public key
-        key_enc  =  generate_encrypted_rsa(public_key,key)
-        iv_enc  = generate_encrypted_rsa(public_key,iv)
-        #sending iv and key
+
+        # Generate key and iv, and encrypting it with the public key
+        key_enc  =  rsa_encrypt(public_key,key)
+        iv_enc  = rsa_encrypt(public_key,iv)
+
+        # Send iv and key
         clientfd.send(key_enc)
         clientfd.send(iv_enc)
 
-        #creating the cipher using the random generated key and CBC mode
-        cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
-        #initialzing the cipher encryptor
-        encryptor = cipher.encryptor()
-        #padding the string (not using)
-        padder = pad.PKCS7(16).padder()
-
-
         while(True):
-            #creating the cipher using the random generated key and CBC mode
-            cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
-            #initialzing the cipher encryptor
-            encryptor = cipher.encryptor()
+   
             #getting user input
             msg = input("Enter message for server: ")
-            #padding
-
-            #pcsk7 padder
-            #msg= padder.update(msg.encode())
-            #msg += padder.finalize()
-            msg = padd(msg).encode()
-            #msg = msg.encode()
-            msg_ct = encryptor.update(msg) + encryptor.finalize()
+            msg_ct = aes_encrypt(key, iv, msg)
             clientfd.send(msg_ct)
 
     #MACs only: the integrity of messages is protected.
     if type_encryption == "MAC":
-        #Encrypting and sending the aes key
-        key_enc  =  generate_encrypted_rsa(public_key,key)
+
+        # Encrypting and sending the aes key
+        key_enc  =  rsa_encrypt(public_key,key)
         clientfd.send(key_enc)
+
         while(True):
+
+            # Send the message and its hmac signiture
             msg = input("Enter message for server: ").encode()
             message_signature = hash_mac(key,msg)
             clientfd.send(msg)
             clientfd.send(message_signature)
 
     if type_encryption == "SYMMETRIC_MAC":
-        #Generate key and initializing vector, and encrypting it with the public key
-        key_enc  =  generate_encrypted_rsa(public_key,key)
-        iv_enc  = generate_encrypted_rsa(public_key,iv)
-        #sending iv and key
+
+        # Encrypt and send key, iv with the public key
+        key_enc  =  rsa_encrypt(public_key,key)
+        iv_enc  = rsa_encrypt(public_key,iv)
         clientfd.send(key_enc)
         clientfd.send(iv_enc)
-        #creating the cipher using the random generated key and CBC mode
-        cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
-        #initialzing the cipher encryptor
-        encryptor = cipher.encryptor()
-        while(True):
-            #creating the cipher using the random generated key and CBC mode
-            cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
-            #initialzing the cipher encryptor
-            encryptor = cipher.encryptor()
-            #getting user input
-            msg = input("Enter message for server: ")
-            #padding
-            msg = padd(msg).encode()
-            msg_ct = encryptor.update(msg) + encryptor.finalize()
 
-            #GETTING SIGNATURE FOR CIPGER MESSAGE
+        while(True):
+
+            # Getting user input and encrypt it
+            msg = input("Enter message for server: ")
+            msg_ct = aes_encrypt(key, iv, msg)
+
+            # Get a signiture for cipher message
             message_signature = hash_mac(key,msg_ct)
-            #SENDING THE ENCRYPTED ALONG WITH SIGNATURE OF THE MESSAGE
+
+            # Send cipher text and signature
             clientfd.send(msg_ct)
             clientfd.send(message_signature)
-
-
-
-        #msg = padd(msg).encode()
-        #client.send(aes_encrypt_b64(msg))
-        
-        #padded_data = padder.update(msg) + padder.finalize()
-        #msg_ct = encryptor.update(msg) + encryptor.finalize()
-        #clientfd.send(msg_ct)
 
 #        # You don't need to receive for this assignment, but if you wanted to
 #        # you would use something like this

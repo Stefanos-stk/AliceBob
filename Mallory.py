@@ -46,29 +46,33 @@ def main():
 
 
     #Expecting handshake
-    clientfd.send(connfd.recv(1024))
-    clientfd.send(connfd.recv(1024))
-    clientfd.send(connfd.recv(1024))
-    clientfd.send(connfd.recv(1024))
-    clientfd.send(connfd.recv(1024))
+    # clientfd.send(connfd.recv(1024))
+    # clientfd.send(connfd.recv(1024))
+    # clientfd.send(connfd.recv(1024))
+    # clientfd.send(connfd.recv(1024))
+    # clientfd.send(connfd.recv(1024))
 
+    handshake = connfd.recv(1024)
+    clientfd.send(handshake)
 
 
     # message loop
     if type_encryption == "NONE":
         while(True):
             #Receiving
-            msg = connfd.recv(1024).decode()
-            print("Received from client Alice: %s" % msg)
+            msg = connfd.recv(1024)
+            print("Received from client Alice: %s" % msg.decode())
 
             #Relaying the message to Bob
-            clientfd.send(msg.encode())
+            clientfd.send(msg)
 
     if type_encryption == "SYMMETRIC":
 
         #recieve the encrypted key and iv 
         key_enc = connfd.recv(1024)
+        print("k")
         iv_enc = connfd.recv(1024)
+        print("i")
 
         #send the encrytped key and iv
         clientfd.send(key_enc)
