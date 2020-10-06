@@ -52,8 +52,8 @@ def main():
     # clientfd.send(connfd.recv(1024))
     # clientfd.send(connfd.recv(1024))
 
-    handshake = connfd.recv(1024)
-    clientfd.send(handshake)
+    # handshake = connfd.recv(1024)
+    # clientfd.send(handshake)
 
 
     # message loop
@@ -68,42 +68,63 @@ def main():
 
     if type_encryption == "SYMMETRIC":
 
-        #recieve the encrypted key and iv 
+        # Recieve the encrypted key and iv 
         key_enc = connfd.recv(1024)
-        print("k")
-        iv_enc = connfd.recv(1024)
-        print("i")
 
-        #send the encrytped key and iv
+        # Send the encrytped key and iv
         clientfd.send(key_enc)
-        clientfd.send(iv_enc)   
+ 
 
         #recieve the encrcypted message and forward it
         while(True):
+
+            key_iv = connfd.recv(1024)
             msg_enc = connfd.recv(1024)
-            print(msg_enc)
+            
+            clientfd.send(key_iv)
             clientfd.send(msg_enc)
+
+            print("Received from client Alice: %s" % msg_enc)
     
     if type_encryption == "MAC":
 
-        #recieving and sending encrypted aes key
+        # Receive and send the key to be used for 
         key_enc = connfd.recv(1024)
         clientfd.send(key_enc)
 
         #recieve message and Mac, print the plain text, forward
         while(True):
-            msg_ct = connfd.recv(1024)
+
+            msg = connfd.recv(1024)
             hash_mac = connfd.recv(1024)
 
-            clientfd.send(msg_ct)
+            clientfd.send(msg)
             clientfd.send(hash_mac)
 
-            
-            print(msg_ct)
+            print("Received from client Alice: %s" % msg.decode())
+
+    if type_encryption == "SYMMETRIC_MAC":
+
+        # Recieve the aes key and the hmac key and send
+        aes_key = connfd.recv(1024)
+        hmac_key = connfd.recv(1024)
+
+        clientfd.send(aes_key)
+        clientfd.send(hmac_key)
+
+        while True:
+
+            key_iv = connfd.recv(1024)
+            msg_ct = connfd.recv(1024)
+            tag = connfd.recv(1024)
 
 
+            clientfd.send(key_iv)
+            clientfd.send(msg_ct)
+            clientfd.send(tag)
 
-
+            print("Received cypher text from Alice: "+ msg_ct)
+            print("Received tag from Alice: " + tag)
 
 
     clientfd.close()
