@@ -96,15 +96,18 @@ def main():
     clientfd.connect((host, int(port)))
     #Handshake ------------- Handshake
 
-    b = 'B'
-    tA = datetime.now().strftime("%d-%b-%Y (%H:%M:%S.%f)")
-    encA_kAB_Kb_key = rsa_encrypt(public_key,("A"+str(key)).encode())
-    print(str(encA_kAB_Kb_key))
-    
-    handshake_signature = private_4sign.sign((b+tA+str(encA_kAB_Kb_key)).encode())
+    #b = 'B'
+    #tA = datetime.now().strftime("%d-%b-%Y (%H:%M:%S.%f)")
+    #encA_kAB_Kb_key = rsa_encrypt(public_key,("A"+str(key)).encode())
+    #print(type(b))
+    #print(type(tA))
+    #print(type(encA_kAB_Kb_key))
 
+    #handshake_signature = private_4sign.sign((b+tA+str(encA_kAB_Kb_key)).encode())
+    
     # handshake
-    clientfd.send((b + tA + str(encA_kAB_Kb_key)+ str(handshake_signature)).encode())
+    #clientfd.send((b + '  '+ tA + '  '  + str(encA_kAB_Kb_key)+  '  ' + str(handshake_signature)).encode())
+
     #clientfd.send(handshake_signature)
 
     # clientfd.send(encA_kAB_Kb_key)

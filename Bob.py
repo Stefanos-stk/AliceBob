@@ -96,7 +96,17 @@ def main():
     (connfd, addr) = listenfd.accept()
 
     #handshake
-    handshake = connfd.recv(1024).decode()
+    #handshake = connfd.recv(1024).encode()
+    #split_hand = handshake.split('  ',3)
+    #b = split_hand[0].encode()
+    #tA = split_hand[1].encode()
+    #encA_kAB_Kb_key = split_hand[2].encode()
+    #handshake_signature = split_hand[3].encode()
+
+
+
+    #message =  b+tA+str(encA_kAB_Kb_key).encode()
+    #public_key_4sign.verify(handshake_signature,message)
 
     # No cryptography: messages are not protected.
     if type_encryption == "NONE":
