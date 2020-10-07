@@ -74,6 +74,7 @@ def padd(s):
     block_size = 16
     remainder = len(s) % block_size
     padding_needed = block_size - remainder
+    #print(padding_needed)
     if padding_needed == 0:
         padding_needed = 16
     #return s + padding_needed * ' '
@@ -130,6 +131,8 @@ def main():
     #print("Hmac", hmac_key, type(hmac_key))
     hmac_key_b64 = str(base64.b64encode(hmac_key))
 
+    message_count  = 0 
+
     b = 'B'
     tA = datetime.now().strftime("%d-%b-%Y (%H:%M:%S.%f)")
     
@@ -170,8 +173,9 @@ def main():
     #No cryptography: messages are not protected.
     if type_encryption == "NONE":
         while(True):
-            msg = input("Enter message for server: ").encode()
-            clientfd.send(msg)
+            msg = input("Enter message for server: ")
+            clientfd.send((str(message_count) + '  ' + msg ).encode())
+            message_count += 1
 
     #Symmetric encryption only: the confidentiality of messages is protected.
     if type_encryption == "SYMMETRIC":
@@ -185,23 +189,23 @@ def main():
             iv = generate_iv()
             iv_b64 = base64.b64encode(iv)
             msg_ct_b64 = base64.b64encode(aes_encrypt(key, iv, msg))
-
-            clientfd.send((str(iv_b64) + "  " + str(msg_ct_b64)).encode())
-
+            print(len(msg_ct_b64))
+            clientfd.send((str(iv_b64) + "  " + str(msg_ct_b64)+ "  " + str(message_count)).encode())
+            message_count += 1
     #MACs only: the integrity of messages is protected.
     if type_encryption == "MAC":
 
         while(True):
 
             # Get message
-            msg = input("Enter message for server: ")
+            msg = input("Enter message for server: ") 
 
 
-            message_signature = hash_mac(hmac_key,msg.encode())
+            message_signature = hash_mac(hmac_key,(msg + str(message_count)).encode())
             message_signature_b64 = base64.b64encode(message_signature)
 
-            clientfd.send((msg + "  " + str(message_signature_b64)).encode())
-
+            clientfd.send((msg + "  " + str(message_signature_b64)+ "  " +  str(message_count)).encode())
+            message_count += 1
 
     if type_encryption == "SYMMETRIC_MAC":
 
@@ -216,12 +220,13 @@ def main():
             iv_b64 = base64.b64encode(iv)
             msg_ct = aes_encrypt(key, iv, msg)
             msg_ct_b64 = base64.b64encode(msg_ct)
-
-            message_signature = hash_mac(hmac_key, msg_ct)
+        
+            message_signature = hash_mac(hmac_key, (str(msg_ct_b64) + str(message_count)).encode())
             message_signature_b64 = base64.b64encode(message_signature)
 
-            clientfd.send((str(iv_b64) + "  " + str(msg_ct_b64) + "  " + str(message_signature_b64)).encode())
+            clientfd.send((str(iv_b64) + "  " + str(msg_ct_b64) + "  " + str(message_signature_b64) + "  " + str(message_count)).encode())
 
+            message_count += 1
 
 
 

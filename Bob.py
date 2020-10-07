@@ -57,13 +57,14 @@ def rsa_decrypt(private_key, enc_msg):
 
 
 def aes_decrypt(aes_key, aes_iv, enc_msg):
-
+    print(len(enc_msg))
     # Creating the cipher using aes key and aes iv
     cipher = Cipher(algorithms.AES(aes_key), modes.CBC(aes_iv), backend=default_backend())
     
     # Decrypt and unpad the message
     decryptor = cipher.decryptor()
     decrypted_msg = decryptor.update(enc_msg) + decryptor.finalize()
+    
     decrypted_msg = unpadd(decrypted_msg)
 
     return decrypted_msg
@@ -74,7 +75,7 @@ def unpadd(msg):
     tail = ord(msg[-1])
     msg_unpadd = msg[:(-1 * tail)]
     return msg_unpadd
-
+    
 
 def public_key_check_sign(public_key, signature, msg):
 
@@ -133,7 +134,7 @@ def main():
         print("Time stamp interval OK")
     else:
         print("Time stamp interval exceeded 2 minutes. Cancelling connection.")
-        #exit()
+        quit()
 
 
     # Get AES key
@@ -152,12 +153,23 @@ def main():
     signature_contents = (b+tA+str(encA_kAB_Kb_key_b64[2:-1])+ str(enc_hmac_key_b64[2:-1])).encode()
     public_key_check_sign(public_key_alice, handshake_signature, signature_contents)
 
+    #counter received
+    messages_received = 0
 
     # No cryptography: messages are not protected.
     if type_encryption == "NONE":
         while(True):
             msg = connfd.recv(1024).decode()
+            
+            split_msg = msg.split('  ',1)
+            count = split_msg[0]
+            msg = split_msg[1]
             print("Received from client: %s" % msg)
+            if messages_received != int(count):
+                print("Incorrect message order... quitting")
+                quit()
+            messages_received += 1
+            
 
     # Symmetric encryption only: the confidentiality of messages is protected.
     if type_encryption == "SYMMETRIC":
@@ -165,22 +177,26 @@ def main():
         while(True):
 
             msg = connfd.recv(1028).decode()
-            split_msg = msg.split('  ',1)
+            split_msg = msg.split('  ',2)
 
             # Get the IV
             iv_b64 = split_msg[0].encode()[2:-1]
             iv = base64.b64decode(iv_b64)
-            print(iv)
+            #print(iv)
 
             # Get the msg_ct
             msg_ct_b64 = split_msg[1].encode()[2:-1]
-            print(msg_ct_b64)
+            #print(msg_ct_b64)
             msg_ct = base64.b64decode(msg_ct_b64)
 
-
+            count  = int(split_msg[2])
             # Decrypt the cipher message and print
             msg = aes_decrypt(aes_key, iv, msg_ct)
             print("Received from client: %s" %  msg)
+            if messages_received != int(count):
+                print("Incorrect message order... quitting")
+                quit()
+            messages_received += 1
     
     # Using only HMAC
     if type_encryption == "MAC":
@@ -189,7 +205,7 @@ def main():
 
             # Receive message and signature
             msg = connfd.recv(1024).decode()
-            split_msg = msg.split('  ',1)
+            split_msg = msg.split('  ',2)
 
             # Get message
             msg = split_msg[0]
@@ -198,10 +214,15 @@ def main():
             signature_b64 = split_msg[1].encode()[2:-1]
             signature = base64.b64decode(signature_b64)
 
-            # Check signature (this returns an exception if signature is comprimised)
-            check_signature(hmac_key,msg.encode(),signature)
-            print("Received: ", msg, "Signature: ",signature)
 
+            count = split_msg[2]
+            # Check signature (this returns an exception if signature is comprimised)
+            check_signature(hmac_key,(msg+count).encode(),signature)
+            print("Received: ", msg, "Signature: ",signature)
+            if messages_received != int(count):
+                print("Incorrect message order... quitting")
+                quit()
+            messages_received += 1
 
     # Symmetric encryption then HMAC
     if type_encryption == "SYMMETRIC_MAC":
@@ -209,7 +230,7 @@ def main():
         while(True):
    
             msg_enc = connfd.recv(1024).decode()
-            split_msg = msg_enc.split('  ',2)
+            split_msg = msg_enc.split('  ',3)
 
             # Get the IV
             iv_b64 = split_msg[0].encode()[2:-1]
@@ -224,13 +245,17 @@ def main():
             signature_b64 = split_msg[2].encode()[2:-1]
             signature = base64.b64decode(signature_b64)
 
+            count = split_msg[3]
             # Check signature (this returns an exception if signature is comprimised)
-            check_signature(hmac_key,msg_ct,signature)
+            check_signature(hmac_key,(str(msg_ct_b64) + count).encode(),signature)
 
             # Decrypt the cipher message and print
             msg = aes_decrypt(aes_key, iv, msg_ct)
             print("Received from client: %s" % msg, "Signature from client: ",signature)
-
+            if messages_received != int(count):
+                print("Incorrect message order... quitting")
+                quit()
+            messages_received += 1
 #        # You don't need to send a response for this assignment
 #        # but if you wanted to you'd do something like this
 #        msg = input("Enter message for client: ")

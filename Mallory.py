@@ -22,7 +22,7 @@ def main():
     public_key  = load_key()
     # parse arguments
     if len(sys.argv) != 5:
-        print("usage: python3 %s <port>" % sys.argv[0])
+        print("usage: python3 %s <host> <in_port> <out_port> <type_enc>" % sys.argv[0])
         quit(1)
 
     host  = sys.argv[1]
@@ -57,18 +57,26 @@ def main():
     if type_encryption == "NONE":
         while(True):
             #Receiving
-            msg = connfd.recv(1024)
-            print("Received from client Alice: %s" % msg.decode())
-
+            original_msg = connfd.recv(1024).decode()
+            split_msg = original_msg.split('  ',1)
+            count = int(split_msg[0])
+            msg = split_msg[1]
+            #ATTACK 3 - UNCOMMENT FOR ATTACK
+            #msg = "ATTACK"
+            print("Received from client Alice: %s" % msg)
             #Relaying the message to Bob
-            clientfd.send(msg)
+            clientfd.send((str(count) + '  ' + msg ).encode())
+
+            
+
 
     if type_encryption == "SYMMETRIC":
 
         while(True):
             #receiving the message
+      
             msg = connfd.recv(1024).decode()
-            split_msg = msg.split('  ',1)
+            split_msg = msg.split('  ',2)
 
             # Get the IV
             iv_b64 = split_msg[0].encode()[2:-1]
@@ -79,11 +87,20 @@ def main():
             msg_ct_b64 = split_msg[1].encode()[2:-1]
             msg_ct = base64.b64decode(msg_ct_b64)
 
+            msg_ct_changed = base64.b64encode(msg_ct)
+            count = int(split_msg[2])
+            
+            #UNCOMMENT FOR ATTACK 4
+            #if len(msg_ct) >= 17:
+            #    msg_ct_changed = base64.b64encode(msg_ct[:-16])
+
+
+         
             print("Received from Alice to Bob: %s" %  msg_ct)
 
             #re-constructing the message and sending it to bob
-            clientfd.send((str(iv_b64) + "  " + str(msg_ct_b64)).encode())
-
+            clientfd.send((str(iv_b64) + "  " + str(msg_ct_changed) + "  " +  str(count)).encode())
+            
                
     
     if type_encryption == "MAC":
@@ -91,7 +108,7 @@ def main():
         while(True):
             #receiving the message and spliting it
             msg = connfd.recv(1024).decode()
-            split_msg = msg.split('  ',1)
+            split_msg = msg.split('  ',2)
 
             # Get message
             msg = split_msg[0]
@@ -100,18 +117,19 @@ def main():
             signature_b64 = split_msg[1].encode()[2:-1]
             signature = base64.b64decode(signature_b64)
 
+            count = split_msg[2]
          
             print("Received message from Alice to Bob : ", msg, "Signature: ",signature)
             #re-constructing the message and sending it to bob
             message_signature_b64 = base64.b64encode(signature)
-            clientfd.send((msg + "  " + str(message_signature_b64)).encode())
+            clientfd.send((msg + "  " + str(message_signature_b64) + "  "+ str(count)).encode())
 
     if type_encryption == "SYMMETRIC_MAC":
 
         while True:
             #receiving the message and splitting it 
             msg_enc = connfd.recv(1024).decode()
-            split_msg = msg_enc.split('  ',2)
+            split_msg = msg_enc.split('  ',3)
 
             #getting the iv
             iv_b64 = split_msg[0].encode()[2:-1]
@@ -125,13 +143,14 @@ def main():
             signature_b64 = split_msg[2].encode()[2:-1]
             signature = base64.b64decode(signature_b64)
 
+            count = split_msg[3]
             print("Received from Alice to Bob : %s" % msg_ct, "Signature from client: ",signature)
             #re-constructing the message and sending it to bob
             iv_b64 = base64.b64encode(iv)
             msg_ct_b64 = base64.b64encode(msg_ct)
             message_signature_b64 = base64.b64encode(signature)
 
-            clientfd.send((str(iv_b64) + "  " + str(msg_ct_b64) + "  " + str(message_signature_b64)).encode())
+            clientfd.send((str(iv_b64) + "  " + str(msg_ct_b64) + "  " + str(message_signature_b64)+ "  " + count).encode())
 
 
     clientfd.close()
