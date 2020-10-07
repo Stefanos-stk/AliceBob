@@ -2,11 +2,13 @@ import sys
 import socket
 from os import _exit as quit
 
+import base64
+
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 
-
+import time 
 def load_key():
     with open("public_key.pem", "rb") as key_file:
         public_key = serialization.load_pem_public_key(
@@ -44,16 +46,11 @@ def main():
     clientfd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     clientfd.connect((host, int(out_port)))
 
-
-    #Expecting handshake
-    # clientfd.send(connfd.recv(1024))
-    # clientfd.send(connfd.recv(1024))
-    # clientfd.send(connfd.recv(1024))
-    # clientfd.send(connfd.recv(1024))
-    # clientfd.send(connfd.recv(1024))
-
-    # handshake = connfd.recv(1024)
-    # clientfd.send(handshake)
+    #receiving handshake
+    handshake = connfd.recv(2048)
+    #time.sleep(2)
+    #relaying it
+    clientfd.send(handshake)
 
 
     # message loop
@@ -68,63 +65,73 @@ def main():
 
     if type_encryption == "SYMMETRIC":
 
-        # Recieve the encrypted key and iv 
-        key_enc = connfd.recv(1024)
-
-        # Send the encrytped key and iv
-        clientfd.send(key_enc)
- 
-
-        #recieve the encrcypted message and forward it
         while(True):
+            #receiving the message
+            msg = connfd.recv(1024).decode()
+            split_msg = msg.split('  ',1)
 
-            key_iv = connfd.recv(1024)
-            msg_enc = connfd.recv(1024)
-            
-            clientfd.send(key_iv)
-            clientfd.send(msg_enc)
+            # Get the IV
+            iv_b64 = split_msg[0].encode()[2:-1]
+            iv = base64.b64decode(iv_b64)
 
-            print("Received from client Alice: %s" % msg_enc)
+
+            # Get the msg_ct
+            msg_ct_b64 = split_msg[1].encode()[2:-1]
+            msg_ct = base64.b64decode(msg_ct_b64)
+
+            print("Received from Alice to Bob: %s" %  msg_ct)
+
+            #re-constructing the message and sending it to bob
+            clientfd.send((str(iv_b64) + "  " + str(msg_ct_b64)).encode())
+
+               
     
     if type_encryption == "MAC":
-
-        # Receive and send the key to be used for 
-        key_enc = connfd.recv(1024)
-        clientfd.send(key_enc)
-
         #recieve message and Mac, print the plain text, forward
         while(True):
+            #receiving the message and spliting it
+            msg = connfd.recv(1024).decode()
+            split_msg = msg.split('  ',1)
 
-            msg = connfd.recv(1024)
-            hash_mac = connfd.recv(1024)
+            # Get message
+            msg = split_msg[0]
 
-            clientfd.send(msg)
-            clientfd.send(hash_mac)
+            # Get signature
+            signature_b64 = split_msg[1].encode()[2:-1]
+            signature = base64.b64decode(signature_b64)
 
-            print("Received from client Alice: %s" % msg.decode())
+         
+            print("Received message from Alice to Bob : ", msg, "Signature: ",signature)
+            #re-constructing the message and sending it to bob
+            message_signature_b64 = base64.b64encode(signature)
+            clientfd.send((msg + "  " + str(message_signature_b64)).encode())
 
     if type_encryption == "SYMMETRIC_MAC":
 
-        # Recieve the aes key and the hmac key and send
-        aes_key = connfd.recv(1024)
-        hmac_key = connfd.recv(1024)
-
-        clientfd.send(aes_key)
-        clientfd.send(hmac_key)
-
         while True:
+            #receiving the message and splitting it 
+            msg_enc = connfd.recv(1024).decode()
+            split_msg = msg_enc.split('  ',2)
 
-            key_iv = connfd.recv(1024)
-            msg_ct = connfd.recv(1024)
-            tag = connfd.recv(1024)
+            #getting the iv
+            iv_b64 = split_msg[0].encode()[2:-1]
+            iv = base64.b64decode(iv_b64)
 
+            #getting the cipher
+            msg_ct_b64 = split_msg[1].encode()[2:-1]
+            msg_ct = base64.b64decode(msg_ct_b64)
 
-            clientfd.send(key_iv)
-            clientfd.send(msg_ct)
-            clientfd.send(tag)
+            #getting the signature
+            signature_b64 = split_msg[2].encode()[2:-1]
+            signature = base64.b64decode(signature_b64)
 
-            print("Received cypher text from Alice: "+ msg_ct)
-            print("Received tag from Alice: " + tag)
+            print("Received from Alice to Bob : %s" % msg_ct, "Signature from client: ",signature)
+            #re-constructing the message and sending it to bob
+            iv_b64 = base64.b64encode(iv)
+            msg_ct_b64 = base64.b64encode(msg_ct)
+            message_signature_b64 = base64.b64encode(signature)
+
+            clientfd.send((str(iv_b64) + "  " + str(msg_ct_b64) + "  " + str(message_signature_b64)).encode())
 
 
     clientfd.close()

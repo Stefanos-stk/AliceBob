@@ -6,6 +6,8 @@ from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes, hmac
 
 import base64
+from datetime import datetime
+from datetime import timedelta
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -111,12 +113,28 @@ def main():
   
     # accept connection
     (connfd, addr) = listenfd.accept()
+    print("Accepting connection with address :", addr)
+
 
     #handshake
     handshake = connfd.recv(2048).decode()
     split_hand = handshake.split('  ',4)
     b = split_hand[0]
-    tA = split_hand[1] #TODO: Error if this isn't within two minutes
+    tA = split_hand[1] 
+    
+    #Checking time stamps tA & tB
+    datetime_object = datetime.strptime(tA, "%d-%b-%Y (%H:%M:%S.%f)")
+    tB = datetime.now().strftime("%d-%b-%Y (%H:%M:%S.%f)")
+    datetime_object_2 = datetime.strptime(tB, "%d-%b-%Y (%H:%M:%S.%f)")
+    difference = datetime_object_2 - datetime_object
+
+    print("Checking time stamps...")
+    if timedelta(minutes= 0) <= difference <= timedelta(minutes =2):
+        print("Time stamp interval OK")
+    else:
+        print("Time stamp interval exceeded 2 minutes. Cancelling connection.")
+        #exit()
+
 
     # Get AES key
     encA_kAB_Kb_key_b64 = split_hand[2].encode()
@@ -170,7 +188,7 @@ def main():
         while(True):
 
             # Receive message and signature
-            msg = connfd.recv(1028).decode()
+            msg = connfd.recv(1024).decode()
             split_msg = msg.split('  ',1)
 
             # Get message
@@ -187,10 +205,9 @@ def main():
 
     # Symmetric encryption then HMAC
     if type_encryption == "SYMMETRIC_MAC":
-        
+    
         while(True):
-
-            # Receiving the cipher message
+   
             msg_enc = connfd.recv(1024).decode()
             split_msg = msg_enc.split('  ',2)
 
@@ -200,7 +217,7 @@ def main():
 
             # Get the msg_ct
             msg_ct_b64 = split_msg[1].encode()[2:-1]
-            print(msg_ct_b64)
+            #print(msg_ct_b64)
             msg_ct = base64.b64decode(msg_ct_b64)
 
             # Get signature
@@ -213,7 +230,6 @@ def main():
             # Decrypt the cipher message and print
             msg = aes_decrypt(aes_key, iv, msg_ct)
             print("Received from client: %s" % msg, "Signature from client: ",signature)
-
 
 #        # You don't need to send a response for this assignment
 #        # but if you wanted to you'd do something like this

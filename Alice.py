@@ -132,7 +132,7 @@ def main():
 
     b = 'B'
     tA = datetime.now().strftime("%d-%b-%Y (%H:%M:%S.%f)")
-
+    
     encA_kAB_Kb_key = rsa_encrypt(public_key_bob,("A" + key_b64).encode())
     enc_hmac_key = rsa_encrypt(public_key_bob, (hmac_key_b64).encode())
     #print(type(b))
