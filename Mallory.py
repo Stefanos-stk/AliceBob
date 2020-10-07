@@ -9,17 +9,10 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 
 import time 
-def load_key():
-    with open("public_key.pem", "rb") as key_file:
-        public_key = serialization.load_pem_public_key(
-            key_file.read(),
-            backend=default_backend()
-    )
-    return public_key
+
 
 def main():
 
-    public_key  = load_key()
     # parse arguments
     if len(sys.argv) != 5:
         print("usage: python3 %s <host> <in_port> <out_port> <type_enc>" % sys.argv[0])
