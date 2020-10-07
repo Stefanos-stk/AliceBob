@@ -54,9 +54,13 @@ def main():
             split_msg = original_msg.split('  ',1)
             count = int(split_msg[0])
             msg = split_msg[1]
-            #ATTACK 3 - UNCOMMENT FOR ATTACK
-            #msg = "ATTACK"
+
             print("Received from client Alice: %s" % msg)
+            
+            #ATTACK 3 - UNCOMMENT FOR ATTACK
+            msg = "ATTACK"
+            #msg = ""
+    
             #Relaying the message to Bob
             clientfd.send((str(count) + '  ' + msg ).encode())
 
