@@ -1,0 +1,2 @@
+1. We spent around 20 hours on this assignment.
+2. This assignment was challenging and took a long time but it was enjoyable to implement a secure communication channel on our own.

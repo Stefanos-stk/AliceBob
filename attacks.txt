@@ -13,18 +13,19 @@ python3 Bob.py 8047 mac
 python3 Mallory.py 127.0.0.1 8080 8047 mac
 python3 Alice.py 127.0.0.1 8080 mac
 
-3)(Mallory.py) Between lines 63-66 set msg to be the modified message. Example: uncomment the line 65
+3)(Mallory.py) Between lines 58-65 set msg to be the modified message. Example: uncomment the line 61 or 62
 
 python3 Bob.py 8047 none
 python3 Mallory.py 127.0.0.1 8080 8047 none
 python3 Alice.py 127.0.0.1 8080 none
 
-4)Have Mallory take 16 bytes of the end of cipher text; Example: uncomment lines 94-95.
+4)Have Mallory truncate the cipher text in a way that produces a truncated plain text; Example: uncomment lines 91-92. If the plain text is sufficiently long,
+    this will truncate the message and not be detectable in this configuration.
 
 python3 Bob.py 8047 symmetric
 python3 Mallory.py 127.0.0.1 8080 8047 symmetric
 python3 Alice.py 127.0.0.1 8080 symmetric
 
 5) You cannot since we have count in place, and Bob is checking the count that he is receiving with his local count.
-If the counts don't line up; Bob quits and ends the connection. If Mallory to change the count parsed from Alice the mac
+If the counts don't line up; Bob quits and ends the connection. If Mallory were to change the count parsed from Alice the mac
 would be wrong and Bob will detect it; therefore quit and close the connection

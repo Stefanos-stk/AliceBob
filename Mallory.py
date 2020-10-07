@@ -56,9 +56,9 @@ def main():
             msg = split_msg[1]
 
             print("Received from client Alice: %s" % msg)
-            
-            #ATTACK 3 - UNCOMMENT FOR ATTACK
-            msg = "ATTACK"
+
+            #ATTACK 3 - UNCOMMENT BELOW FOR ATTACK
+            #msg = "ATTACK"
             #msg = ""
     
             #Relaying the message to Bob
@@ -87,9 +87,9 @@ def main():
             msg_ct_changed = base64.b64encode(msg_ct)
             count = int(split_msg[2])
             
-            #UNCOMMENT FOR ATTACK 4
-            #if len(msg_ct) >= 17:
-            #    msg_ct_changed = base64.b64encode(msg_ct[:-16])
+            #UNCOMMENT BELOW FOR ATTACK 4
+            # if len(msg_ct) >= 17:
+            #     msg_ct_changed = base64.b64encode(msg_ct[:-16])
          
             print("Received from Alice to Bob: %s" %  msg_ct)
 
@@ -114,7 +114,7 @@ def main():
 
             count = split_msg[2]
          
-            print("Received message from Alice to Bob : ", msg, "Signature: ",signature)
+            print("Received message from Alice to Bob :", msg, "Signature: ",signature)
             #re-constructing the message and sending it to bob
             message_signature_b64 = base64.b64encode(signature)
             clientfd.send((msg + "  " + str(message_signature_b64) + "  "+ str(count)).encode())
