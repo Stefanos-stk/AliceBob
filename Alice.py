@@ -71,13 +71,12 @@ def aes_encrypt(key, iv, msg):
 
 
 def padd(s):
+    
     block_size = 16
     remainder = len(s) % block_size
     padding_needed = block_size - remainder
-    #print(padding_needed)
     if padding_needed == 0:
         padding_needed = 16
-    #return s + padding_needed * ' '
     return s + padding_needed * chr(padding_needed)
 
 
@@ -122,24 +121,22 @@ def main():
 
     ### --- Handshake --- ###
 
-    # Generate aes_key
-    #print(key,type(key))
     key_b64 = str(base64.b64encode(key))
 
     # Generate hmac key
     hmac_key, iv = generate_key_iv()
-    #print("Hmac", hmac_key, type(hmac_key))
     hmac_key_b64 = str(base64.b64encode(hmac_key))
 
+    
     message_count  = 0 
 
     b = 'B'
     tA = datetime.now().strftime("%d-%b-%Y (%H:%M:%S.%f)")
     
+    
     encA_kAB_Kb_key = rsa_encrypt(public_key_bob,("A" + key_b64).encode())
     enc_hmac_key = rsa_encrypt(public_key_bob, (hmac_key_b64).encode())
-    #print(type(b))
-    #print(type(tA))
+
     
     enc_key_b64 = base64.b64encode(encA_kAB_Kb_key)
     enc_hmac_key_b64 = base64.b64encode(enc_hmac_key)
@@ -155,20 +152,6 @@ def main():
     handshake = (b + '  ' + tA + '  '  + str(enc_key_b64) + '  ' +
         str(enc_hmac_key_b64) + '  ' + str(handshake_signature_b64)).encode()
     clientfd.send(handshake)
-    #print(handshake_signature_b64)
-
-    #clientfd.send(handshake_signature)
-
-    # print(handshake, type(handshake))
-
-
-
-    # clientfd.send(encA_kAB_Kb_key)
-    # clientfd.send(encA_kAB_Kb_iv)
-    # clientfd.send(handshake_signature)
-    #clientfd.send(b+b','+ tA+b','+encA_kAB_Kb_key+b','+encA_kAB_Kb_iv +b','+handshake_signature)
-
-
 
     #No cryptography: messages are not protected.
     if type_encryption == "NONE":
@@ -200,7 +183,6 @@ def main():
             # Get message
             msg = input("Enter message for server: ") 
 
-
             message_signature = hash_mac(hmac_key,(msg + str(message_count)).encode())
             message_signature_b64 = base64.b64encode(message_signature)
 
@@ -227,8 +209,6 @@ def main():
             clientfd.send((str(iv_b64) + "  " + str(msg_ct_b64) + "  " + str(message_signature_b64) + "  " + str(message_count)).encode())
 
             message_count += 1
-
-
 
 
 #        # You don't need to receive for this assignment, but if you wanted to

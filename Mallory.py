@@ -93,8 +93,6 @@ def main():
             #UNCOMMENT FOR ATTACK 4
             #if len(msg_ct) >= 17:
             #    msg_ct_changed = base64.b64encode(msg_ct[:-16])
-
-
          
             print("Received from Alice to Bob: %s" %  msg_ct)
 

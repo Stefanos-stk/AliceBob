@@ -182,7 +182,6 @@ def main():
             # Get the IV
             iv_b64 = split_msg[0].encode()[2:-1]
             iv = base64.b64decode(iv_b64)
-            #print(iv)
 
             # Get the msg_ct
             msg_ct_b64 = split_msg[1].encode()[2:-1]
