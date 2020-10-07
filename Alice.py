@@ -4,6 +4,7 @@ import os
 from os import _exit as quit
 from datetime import datetime
 import base64
+import time
 
 
 from cryptography.hazmat.backends import default_backend
@@ -34,6 +35,10 @@ def generate_key_iv():
     key = os.urandom(32)
     iv = os.urandom(16)
     return key,iv
+
+def generate_iv():
+    iv = os.urandom(16)
+    return iv
 
 
 def rsa_encrypt(public_key,message):
@@ -95,20 +100,23 @@ def main():
 
     clientfd.connect((host, int(port)))
     #Handshake ------------- Handshake
+    print(key,type(key))
+    key_b64 = str(base64.b64encode(key))
 
-    #b = 'B'
-    #tA = datetime.now().strftime("%d-%b-%Y (%H:%M:%S.%f)")
-    #encA_kAB_Kb_key = rsa_encrypt(public_key,("A"+str(key)).encode())
+    b = 'B'
+    tA = datetime.now().strftime("%d-%b-%Y (%H:%M:%S.%f)")
+    encA_kAB_Kb_key = rsa_encrypt(public_key,("A" + key_b64).encode())
     #print(type(b))
     #print(type(tA))
-    #print(type(encA_kAB_Kb_key))
-
-    #handshake_signature = private_4sign.sign((b+tA+str(encA_kAB_Kb_key)).encode())
     
+    enc_key_b64 = base64.b64encode(encA_kAB_Kb_key)
+    handshake_signature = private_4sign.sign((b+tA+str(base64.b64encode(encA_kAB_Kb_key))).encode())
+    print(type(enc_key_b64),enc_key_b64)
     # handshake
-    #clientfd.send((b + '  '+ tA + '  '  + str(encA_kAB_Kb_key)+  '  ' + str(handshake_signature)).encode())
+    clientfd.send((b + '  '+ tA + '  '  + str(base64.b64encode(encA_kAB_Kb_key))+ 
+     '  ' + str(base64.b64encode(handshake_signature))).encode())
 
-    #clientfd.send(handshake_signature)
+    clientfd.send(handshake_signature)
 
     # clientfd.send(encA_kAB_Kb_key)
     # clientfd.send(encA_kAB_Kb_iv)
@@ -128,16 +136,18 @@ def main():
 
         # Generate key and iv, and encrypting it with the public key
         key_enc  =  rsa_encrypt(public_key,key)
-        iv_enc  = rsa_encrypt(public_key,iv)
+        #iv_enc  = rsa_encrypt(public_key,iv)
 
         # Send iv and key
         clientfd.send(key_enc)
-        clientfd.send(iv_enc)
+        #clientfd.send(iv_enc)
 
         while(True):
-   
+
             #getting user input
             msg = input("Enter message for server: ")
+            iv = generate_iv()
+            clientfd.send(iv)
             msg_ct = aes_encrypt(key, iv, msg)
             clientfd.send(msg_ct)
 
@@ -160,22 +170,29 @@ def main():
 
         # Encrypt and send key, iv with the public key
         key_enc  =  rsa_encrypt(public_key,key)
-        iv_enc  = rsa_encrypt(public_key,iv)
         clientfd.send(key_enc)
-        clientfd.send(iv_enc)
+   
 
+        mac_key, iv = generate_key_iv()
+        mac_key_enc = rsa_encrypt(public_key,mac_key)
+        clientfd.send(mac_key_enc)
         while(True):
 
             # Getting user input and encrypt it
             msg = input("Enter message for server: ")
+            iv = generate_iv()
             msg_ct = aes_encrypt(key, iv, msg)
 
             # Get a signiture for cipher message
-            message_signature = hash_mac(key,msg_ct)
+            
+            tag = hash_mac(mac_key,msg_ct)
 
-            # Send cipher text and signature
+            # Send iv , cipher text and signature
+            clientfd.send(iv)
+            time.sleep(0.1)
             clientfd.send(msg_ct)
-            clientfd.send(message_signature)
+            time.sleep(0.1)
+            clientfd.send(tag)
 
 #        # You don't need to receive for this assignment, but if you wanted to
 #        # you would use something like this
