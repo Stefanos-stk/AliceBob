@@ -217,7 +217,7 @@ def main():
             count = split_msg[2]
             # Check signature (this returns an exception if signature is comprimised)
             check_signature(hmac_key,(msg+count).encode(),signature)
-            print("Received: ", msg, "Signature: ",signature)
+            print("Received: ", msg)
             if messages_received != int(count):
                 print("Incorrect message order... quitting")
                 quit()
@@ -250,7 +250,7 @@ def main():
 
             # Decrypt the cipher message and print
             msg = aes_decrypt(aes_key, iv, msg_ct)
-            print("Received from client: %s" % msg, "Signature from client: ",signature)
+            print("Received from client: %s" % msg)
             if messages_received != int(count):
                 print("Incorrect message order... quitting")
                 quit()

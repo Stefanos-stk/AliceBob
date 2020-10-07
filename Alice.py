@@ -167,12 +167,11 @@ def main():
 
             #getting user input
             msg = input("Enter message for server: ")
-
+           
             # Generate IV and encrpyt the message
             iv = generate_iv()
             iv_b64 = base64.b64encode(iv)
             msg_ct_b64 = base64.b64encode(aes_encrypt(key, iv, msg))
-            print(len(msg_ct_b64))
             clientfd.send((str(iv_b64) + "  " + str(msg_ct_b64)+ "  " + str(message_count)).encode())
             message_count += 1
     #MACs only: the integrity of messages is protected.
