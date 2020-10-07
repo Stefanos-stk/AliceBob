@@ -14,26 +14,29 @@ from cryptography.hazmat.primitives import padding as pad
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 def load_keys():
-    with open("private_key.pem", "rb") as key_file:
-        private_key = serialization.load_pem_private_key(
+    with open("private_key_bob.pem", "rb") as key_file:
+        private_key_bob = serialization.load_pem_private_key(
             key_file.read(),
             password=None,
             backend=default_backend()
     )
-    with open("public_key.pem", "rb") as key_file:
-        public_key = serialization.load_pem_public_key(
+    with open("public_key_bob.pem", "rb") as key_file:
+        public_key_bob = serialization.load_pem_public_key(
             key_file.read(),
             backend=default_backend()
     )
 
-    with open("public_key_4sign.raw",'rb') as key_file:
-        public_key_4sign = ed25519.Ed25519PublicKey.from_public_bytes(key_file.read())
+    with open("public_key_alice.pem",'rb') as key_file:
+        public_key_alice = serialization.load_pem_public_key(
+            key_file.read(),
+            backend=default_backend()
+    )
 
-    return public_key,private_key,public_key_4sign
+    return public_key_bob,private_key_bob,public_key_alice
 
 
 def check_signature(key,msg,signature):
-    h = hmac.HMAC(key, hashes.SHA256())
+    h = hmac.HMAC(key, hashes.SHA256(), backend=default_backend())
     h.update(msg)
     h.verify(signature)
 
@@ -54,7 +57,7 @@ def rsa_decrypt(private_key, enc_msg):
 def aes_decrypt(aes_key, aes_iv, enc_msg):
 
     # Creating the cipher using aes key and aes iv
-    cipher = Cipher(algorithms.AES(aes_key), modes.CBC(aes_iv))
+    cipher = Cipher(algorithms.AES(aes_key), modes.CBC(aes_iv), backend=default_backend())
     
     # Decrypt and unpad the message
     decryptor = cipher.decryptor()
@@ -71,16 +74,29 @@ def unpadd(msg):
     return msg_unpadd
 
 
+def public_key_check_sign(public_key, signature, msg):
+
+    public_key.verify(
+        signature,
+        msg,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH
+        ),
+        hashes.SHA256()
+    )
+
 def main():
-    # parse arguments
-    public_key,private_key,public_key_4sign  = load_keys()
+    # Parse arguments
+    public_key_bob,private_key_bob,public_key_alice  = load_keys()
 
 
     if len(sys.argv) != 3:
         print("usage: python3 %s <port>" % sys.argv[0])
         quit(1)
     port = sys.argv[1]
-    #type of encryption
+
+    # Type of encryption
     type_encryption = sys.argv[2].upper() 
     
     # open a socket
@@ -97,26 +113,27 @@ def main():
     (connfd, addr) = listenfd.accept()
 
     #handshake
-    handshake = connfd.recv(1024).decode()
-
-
-    split_hand = handshake.split('  ',3)
+    handshake = connfd.recv(2048).decode()
+    split_hand = handshake.split('  ',4)
     b = split_hand[0]
+    tA = split_hand[1] #TODO: Error if this isn't within two minutes
 
-    tA = split_hand[1]
-    encA_kAB_Kb_key = split_hand[2].encode()
-    encA_kAB_Kb_key = base64.b64decode(encA_kAB_Kb_key[2:-1])
-    print("This is the enc")
-    print(encA_kAB_Kb_key,type(encA_kAB_Kb_key))
-    handshake_signature = split_hand[3]
+    # Get AES key
+    encA_kAB_Kb_key_b64 = split_hand[2].encode()
+    encA_kAB_Kb_key = base64.b64decode(encA_kAB_Kb_key_b64[2:-1])
+    aes_key = base64.b64decode(rsa_decrypt(private_key_bob,encA_kAB_Kb_key)[3:-1])
 
+    # Get HMAC key
+    enc_hmac_key_b64 = split_hand[3].encode()
+    enc_hmac_key = base64.b64decode(enc_hmac_key_b64[2:-1])
+    hmac_key = base64.b64decode(rsa_decrypt(private_key_bob,enc_hmac_key)[2:-1])
 
-    thing = base64.b64decode(rsa_decrypt(private_key,encA_kAB_Kb_key)[3:-1])
-    print("This is the thing/aes key")
-    print(thing,type(thing))
-    
-    message =  b+tA+str(base64.b64encode(encA_kAB_Kb_key))
-    public_key_4sign.verify(handshake_signature,message)
+    # Check the signature
+    handshake_signature = split_hand[4].encode()
+    handshake_signature = base64.b64decode(handshake_signature[2:-1])
+    signature_contents = (b+tA+str(encA_kAB_Kb_key_b64[2:-1])+ str(enc_hmac_key_b64[2:-1])).encode()
+    public_key_check_sign(public_key_alice, handshake_signature, signature_contents)
+
 
     # No cryptography: messages are not protected.
     if type_encryption == "NONE":
@@ -127,73 +144,75 @@ def main():
     # Symmetric encryption only: the confidentiality of messages is protected.
     if type_encryption == "SYMMETRIC":
 
-        # Getting the key and iv 
-        key_enc = connfd.recv(1024)
-        #iv_enc = connfd.recv(1024)
-
-        # Decrypting aes key and iv with rsa private key
-        aes_key = rsa_decrypt(private_key, key_enc)
-        #aes_iv = rsa_decrypt(private_key, iv_enc)
-
         while(True):
-            aes_iv = connfd.recv(1024)
-            # Receiving the cipher message
-            msg_ct = connfd.recv(1024)
 
-            # Decrypt the cipher message
-            msg = aes_decrypt(aes_key, aes_iv, msg_ct)
+            msg = connfd.recv(1028).decode()
+            split_msg = msg.split('  ',1)
 
+            # Get the IV
+            iv_b64 = split_msg[0].encode()[2:-1]
+            iv = base64.b64decode(iv_b64)
+            print(iv)
+
+            # Get the msg_ct
+            msg_ct_b64 = split_msg[1].encode()[2:-1]
+            print(msg_ct_b64)
+            msg_ct = base64.b64decode(msg_ct_b64)
+
+
+            # Decrypt the cipher message and print
+            msg = aes_decrypt(aes_key, iv, msg_ct)
             print("Received from client: %s" %  msg)
     
     # Using only HMAC
     if type_encryption == "MAC":
-        
-        # Recieving and decrypting the aes key in order to check signature
-        key_enc = connfd.recv(1024)
-        aes_key = rsa_decrypt(private_key, key_enc)
  
         while(True):
 
             # Receive message and signature
-            msg_ct = connfd.recv(1024)
-            signature = connfd.recv(1024)
+            msg = connfd.recv(1028).decode()
+            split_msg = msg.split('  ',1)
+
+            # Get message
+            msg = split_msg[0]
+
+            # Get signature
+            signature_b64 = split_msg[1].encode()[2:-1]
+            signature = base64.b64decode(signature_b64)
 
             # Check signature (this returns an exception if signature is comprimised)
-            check_signature(aes_key,msg_ct,signature)
-            print("Received: ", msg_ct.decode(), "Signature: ",signature)
+            check_signature(hmac_key,msg.encode(),signature)
+            print("Received: ", msg, "Signature: ",signature)
+
 
     # Symmetric encryption then HMAC
     if type_encryption == "SYMMETRIC_MAC":
-
-        # Revieving the key and iv 
-        key_enc = connfd.recv(1024)
-        #iv_enc = connfd.recv(1024)
-        mac_key = connfd.recv(1024)
-        mac_key_dec = rsa_decrypt(private_key,mac_key)
-        # Decrypting aes key and iv using the private key
-        aes_key = rsa_decrypt(private_key, key_enc)
-        #aes_iv = rsa_decrypt(private_key, iv_enc)
         
         while(True):
 
             # Receiving the cipher message
-            iv = connfd.recv(1024)
-            msg_ct = connfd.recv(1024)
-            tag = connfd.recv(1024)
+            msg_enc = connfd.recv(1024).decode()
+            split_msg = msg_enc.split('  ',2)
 
-            # Decrypt the  message using aes
-            msg =aes_decrypt(aes_key, iv, msg_ct)
+            # Get the IV
+            iv_b64 = split_msg[0].encode()[2:-1]
+            iv = base64.b64decode(iv_b64)
 
-            # Checking the signature: results in exception if compromised
-            check_signature(mac_key_dec,msg_ct,tag)
-            print(msg.strip())
-            print(msg)
-            print("Received from client: %s" % msg.strip(), "Signature from client: ",tag)
+            # Get the msg_ct
+            msg_ct_b64 = split_msg[1].encode()[2:-1]
+            print(msg_ct_b64)
+            msg_ct = base64.b64decode(msg_ct_b64)
 
+            # Get signature
+            signature_b64 = split_msg[2].encode()[2:-1]
+            signature = base64.b64decode(signature_b64)
 
+            # Check signature (this returns an exception if signature is comprimised)
+            check_signature(hmac_key,msg_ct,signature)
 
-
-
+            # Decrypt the cipher message and print
+            msg = aes_decrypt(aes_key, iv, msg_ct)
+            print("Received from client: %s" % msg, "Signature from client: ",signature)
 
 
 #        # You don't need to send a response for this assignment

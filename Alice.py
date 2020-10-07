@@ -19,16 +19,21 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 
 def load_keys():
-    with open("public_key.pem", "rb") as key_file:
-        public_key = serialization.load_pem_public_key(
+
+    with open("public_key_bob.pem", "rb") as key_file:
+        public_key_bob = serialization.load_pem_public_key(
             key_file.read(),
             backend=default_backend()
     )
 
-    with open("private_key_4sign.raw",'rb') as key_file:
-        private_key_4sign = ed25519.Ed25519PrivateKey.from_private_bytes(key_file.read())
+    with open("private_key_alice.pem", "rb") as key_file:
+        private_key_alice = serialization.load_pem_private_key(
+            key_file.read(),
+            password=None,
+            backend=default_backend()
+    )
 
-    return public_key,private_key_4sign
+    return public_key_bob,private_key_alice
 
 
 def generate_key_iv():
@@ -56,7 +61,7 @@ def rsa_encrypt(public_key,message):
 def aes_encrypt(key, iv, msg):
 
     #Create cipher and encrypter in CBC mode with key and iv
-    cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
     encryptor = cipher.encryptor()
     
     # Encrypt the message
@@ -76,14 +81,27 @@ def padd(s):
 
 
 def hash_mac(key,msg):
-    h = hmac.HMAC(key, hashes.SHA256())
+    h = hmac.HMAC(key, hashes.SHA256(), backend=default_backend())
     h.update(msg)
     
     return h.finalize()
 
+def private_key_sign(key, msg):
+
+    signature = key.sign(
+        msg,
+        padding.PSS(
+        mgf=padding.MGF1(hashes.SHA256()),
+        salt_length=padding.PSS.MAX_LENGTH
+        ),
+        hashes.SHA256()
+    )
+
+    return signature
+
 
 def main():
-    public_key,private_4sign  = load_keys()
+    public_key_bob,private_key_alice  = load_keys()
     key,iv =  generate_key_iv()
     # parse arguments
     if len(sys.argv) != 4:
@@ -99,24 +117,48 @@ def main():
     # connect to server
 
     clientfd.connect((host, int(port)))
-    #Handshake ------------- Handshake
-    print(key,type(key))
+    
+
+    ### --- Handshake --- ###
+
+    # Generate aes_key
+    #print(key,type(key))
     key_b64 = str(base64.b64encode(key))
+
+    # Generate hmac key
+    hmac_key, iv = generate_key_iv()
+    #print("Hmac", hmac_key, type(hmac_key))
+    hmac_key_b64 = str(base64.b64encode(hmac_key))
 
     b = 'B'
     tA = datetime.now().strftime("%d-%b-%Y (%H:%M:%S.%f)")
-    encA_kAB_Kb_key = rsa_encrypt(public_key,("A" + key_b64).encode())
+
+    encA_kAB_Kb_key = rsa_encrypt(public_key_bob,("A" + key_b64).encode())
+    enc_hmac_key = rsa_encrypt(public_key_bob, (hmac_key_b64).encode())
     #print(type(b))
     #print(type(tA))
     
     enc_key_b64 = base64.b64encode(encA_kAB_Kb_key)
-    handshake_signature = private_4sign.sign((b+tA+str(base64.b64encode(encA_kAB_Kb_key))).encode())
-    print(type(enc_key_b64),enc_key_b64)
-    # handshake
-    clientfd.send((b + '  '+ tA + '  '  + str(base64.b64encode(encA_kAB_Kb_key))+ 
-     '  ' + str(base64.b64encode(handshake_signature))).encode())
+    enc_hmac_key_b64 = base64.b64encode(enc_hmac_key)
 
-    clientfd.send(handshake_signature)
+    # Create signiture
+    signiture_contents = (b+tA+str(enc_key_b64)+ str(enc_hmac_key_b64)).encode()
+    handshake_signature = private_key_sign(private_key_alice, signiture_contents)
+    handshake_signature_b64 = base64.b64encode(handshake_signature)
+    
+    
+  
+    # handshake
+    handshake = (b + '  ' + tA + '  '  + str(enc_key_b64) + '  ' +
+        str(enc_hmac_key_b64) + '  ' + str(handshake_signature_b64)).encode()
+    clientfd.send(handshake)
+    #print(handshake_signature_b64)
+
+    #clientfd.send(handshake_signature)
+
+    # print(handshake, type(handshake))
+
+
 
     # clientfd.send(encA_kAB_Kb_key)
     # clientfd.send(encA_kAB_Kb_iv)
@@ -134,65 +176,55 @@ def main():
     #Symmetric encryption only: the confidentiality of messages is protected.
     if type_encryption == "SYMMETRIC":
 
-        # Generate key and iv, and encrypting it with the public key
-        key_enc  =  rsa_encrypt(public_key,key)
-        #iv_enc  = rsa_encrypt(public_key,iv)
+        while(True):
 
-        # Send iv and key
-        clientfd.send(key_enc)
-        #clientfd.send(iv_enc)
+            #getting user input
+            msg = input("Enter message for server: ")
+
+            # Generate IV and encrpyt the message
+            iv = generate_iv()
+            iv_b64 = base64.b64encode(iv)
+            msg_ct_b64 = base64.b64encode(aes_encrypt(key, iv, msg))
+
+            clientfd.send((str(iv_b64) + "  " + str(msg_ct_b64)).encode())
+
+    #MACs only: the integrity of messages is protected.
+    if type_encryption == "MAC":
+
+        while(True):
+
+            # Get message
+            msg = input("Enter message for server: ")
+
+
+            message_signature = hash_mac(hmac_key,msg.encode())
+            message_signature_b64 = base64.b64encode(message_signature)
+
+            clientfd.send((msg + "  " + str(message_signature_b64)).encode())
+
+
+    if type_encryption == "SYMMETRIC_MAC":
+
 
         while(True):
 
             #getting user input
             msg = input("Enter message for server: ")
+
+            # Generate IV and encrypt the message
             iv = generate_iv()
-            clientfd.send(iv)
+            iv_b64 = base64.b64encode(iv)
             msg_ct = aes_encrypt(key, iv, msg)
-            clientfd.send(msg_ct)
+            msg_ct_b64 = base64.b64encode(msg_ct)
 
-    #MACs only: the integrity of messages is protected.
-    if type_encryption == "MAC":
+            message_signature = hash_mac(hmac_key, msg_ct)
+            message_signature_b64 = base64.b64encode(message_signature)
 
-        # Encrypting and sending the aes key
-        key_enc  =  rsa_encrypt(public_key,key)
-        clientfd.send(key_enc)
+            clientfd.send((str(iv_b64) + "  " + str(msg_ct_b64) + "  " + str(message_signature_b64)).encode())
 
-        while(True):
 
-            # Send the message and its hmac signiture
-            msg = input("Enter message for server: ").encode()
-            message_signature = hash_mac(key,msg)
-            clientfd.send(msg)
-            clientfd.send(message_signature)
 
-    if type_encryption == "SYMMETRIC_MAC":
 
-        # Encrypt and send key, iv with the public key
-        key_enc  =  rsa_encrypt(public_key,key)
-        clientfd.send(key_enc)
-   
-
-        mac_key, iv = generate_key_iv()
-        mac_key_enc = rsa_encrypt(public_key,mac_key)
-        clientfd.send(mac_key_enc)
-        while(True):
-
-            # Getting user input and encrypt it
-            msg = input("Enter message for server: ")
-            iv = generate_iv()
-            msg_ct = aes_encrypt(key, iv, msg)
-
-            # Get a signiture for cipher message
-            
-            tag = hash_mac(mac_key,msg_ct)
-
-            # Send iv , cipher text and signature
-            clientfd.send(iv)
-            time.sleep(0.1)
-            clientfd.send(msg_ct)
-            time.sleep(0.1)
-            clientfd.send(tag)
 
 #        # You don't need to receive for this assignment, but if you wanted to
 #        # you would use something like this
