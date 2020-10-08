@@ -2,7 +2,7 @@
 
 ## Setup:
 * Install cryptography package using ```pip3 install cryptography```
-* Install socket package ```pip3 install cryptography```
+* Install socket package ```pip3 install socket```
 
 ## Instructions:
 * We tested this on Ubuntu and Windows 
