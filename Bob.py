@@ -57,7 +57,7 @@ def rsa_decrypt(private_key, enc_msg):
 
 
 def aes_decrypt(aes_key, aes_iv, enc_msg):
-    print(len(enc_msg))
+
     # Creating the cipher using aes key and aes iv
     cipher = Cipher(algorithms.AES(aes_key), modes.CBC(aes_iv), backend=default_backend())
     
@@ -129,9 +129,8 @@ def main():
     datetime_object_2 = datetime.strptime(tB, "%d-%b-%Y (%H:%M:%S.%f)")
     difference = datetime_object_2 - datetime_object
 
-    print("Checking time stamps...")
     if timedelta(minutes= 0) <= difference <= timedelta(minutes =2):
-        print("Time stamp interval OK")
+        q = 4
     else:
         print("Time stamp interval exceeded 2 minutes. Cancelling connection.")
         quit()
