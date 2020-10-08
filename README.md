@@ -20,6 +20,7 @@
     (Alice is the client)
     * The type_enc should match in all 3 (Alice,Bob,Mallory)
 
+
 # Handshake Protocol
 ```A -> B: B, tA, Enc(A,kAB; K_B), Sign(B, tA, Enc(A,kAB; K_B); k_A)```
 
